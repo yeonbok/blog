@@ -125,14 +125,21 @@ pip install openvino-genai==24.3
 ```
 
 Let's see how to run the same pipilene with OpenVINO GenAI C++ API. The GenAI API is designed to be intuitive and provides a seamless migration from 🤗 Transformers API. 
+
+>**Note**: In the below example, any other available device in your environment can be specified for "device" variable. For example, if you are using an Intel CPU with integrated graphics, "GPU" is be a good option to try with. To check the available devices, you can use ov::Core::get_available_devices method (refer to [query-device-properties](https://docs.openvino.ai/2024/openvino-workflow/running-inference/inference-devices-and-modes/query-device-properties.html)).
+
+
 ```cpp
 #include "openvino/genai/llm_pipeline.hpp"
 #include <iostream>
 
 int main(int argc, char* argv[]) {
    std::string model_path = "./llama-3.1-8b-ov";
-   std::string device = "CPU"  // GPU can be used as well
-   ov::genai::LLMPipeline pipe(model_path, device);
+   std::string device = "CPU"
+   ov::AnyMap device_config = {}
+   device_config[ov::cache_dir.name()] = "llm-cache";
+   // for further device specific performance configs, refer to each device's tab under https://docs.openvino.ai/2024/openvino-workflow/running-inference/inference-devices-and-modes.html
+   ov::genai::LLMPipeline pipe(model_path, device, device_config);
    std::cout << pipe.generate("What is LLM model?", ov::genai::max_new_tokens(256));
 }
 ```
@@ -144,7 +151,7 @@ config.max_new_tokens = 256;
 std::string result = pipe.generate(prompt, config);
 ```
 
-GenAI code samples demostrate streaming and chat scenarios as well as Beam Search, etc. For example, one can use the following API to plug streamer to the text generation process:
+With the LLMPipieline, users can not only effortlessly leverage various decoding algorithms such as Beam Search but also construct an interactive chat scenario with a Streamer as in the below example. Moreover, one can take advantage of enhanced internal optimizations with LLMPipeline, such as reduced prompt processing time with utilization of KV cache of previous chat history with the chat methods : start_chat() and finish_chat() (refer to [using-genai-in-chat-scenario](https://docs.openvino.ai/2024/learn-openvino/llm_inference_guide/genai-guide.html#using-genai-in-chat-scenario)).
 
 ```cpp
 ov::genai::GenerationConfig config;
@@ -152,6 +159,7 @@ config.max_new_tokens = 100;
 config.do_sample = true;
 config.top_p = 0.9;
 config.top_k = 30;
+
 auto streamer = [](std::string subword) {
     std::cout << subword << std::flush;
     return false;
@@ -159,7 +167,15 @@ auto streamer = [](std::string subword) {
 
 // Since the streamer is set, the results will
 // be printed each time a new token is generated.
-pipe.generate(prompt, config, streamer);
+pipe.start_chat()
+for (size_t i = 0; i < questions.size(); i++) {
+   std::cout << "question:\n";
+   std::getline(std::cin, prompt);
+
+   std::cout << pipe.generate(prompt) << std::endl;
+}
+pipe.finish_chat();
+
 ```
 
 You can find more details in this [tutorial](https://docs.openvino.ai/2024/learn-openvino/llm_inference_guide/genai-guide.html).
